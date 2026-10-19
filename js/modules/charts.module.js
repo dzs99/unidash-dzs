@@ -1,17 +1,132 @@
-import { mockFinanceSeries, mockTransactions } from "../data/mock.data.js"
-let dashboardChart, financeChart, expenseChart
-const chartText = "#cbd5e1"
-const grid = "rgba(148, 163, 184, 0.08)"
+import { getTasks, getTransactions } from "../services/storage.service.js"
+import { isTaskOverdue } from "./tasks.module.js"
 
-function baseOptions() { return { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartText } } }, scales: { x: { ticks:{color:chartText}, grid:{display:false} }, y:{ticks:{color:chartText},grid:{color:grid}} } } }
+const charts = new Map()
 
-function createOrReplace(current, canvas, config) { if (current) current.destroy(); return new Chart(canvas, config) }
+function destroyChart(id) {
+  const chart = charts.get(id)
+  if (chart) chart.destroy()
+}
 
-export function renderVisualCharts() {
-  const barData = { labels: mockFinanceSeries.labels, datasets: [ { label:"Ingresos", data:mockFinanceSeries.income, backgroundColor:"rgba(34,211,238,.72)" }, { label:"Egresos", data:mockFinanceSeries.expense, backgroundColor:"rgba(244,63,94,.72)" } ] }
-  dashboardChart = createOrReplace(dashboardChart, document.querySelector("#dashboard-finance-chart"), { type:"bar", data:barData, options:baseOptions() })
-  financeChart = createOrReplace(financeChart, document.querySelector("#monthly-finance-chart"), { type:"line", data:{ labels:mockFinanceSeries.labels, datasets:[ {label:"Ingresos",data:mockFinanceSeries.income,borderColor:"#22d3ee",tension:.3}, {label:"Egresos",data:mockFinanceSeries.expense,borderColor:"#fb7185",tension:.3} ] }, options:baseOptions() })
-  const expenses = mockTransactions.filter((x)=>x.type === "expense")
-  const grouped = expenses.reduce((acc,x)=>{acc[x.category]=(acc[x.category]||0)+x.amount;return acc},{})
-  expenseChart = createOrReplace(expenseChart, document.querySelector("#expense-category-chart"), { type:"doughnut", data:{labels:Object.keys(grouped),datasets:[{data:Object.values(grouped)}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:chartText}}}} })
+function createChart(id, config) {
+  const canvas = document.querySelector(`#${id}`)
+  if (!canvas || typeof Chart === "undefined") return
+  destroyChart(id)
+  const chart = new Chart(canvas, config)
+  charts.set(id, chart)
+}
+
+function monthKey(date) {
+  return date.slice(0, 7)
+}
+
+function monthLabel(key) {
+  const [year, month] = key.split("-")
+  return new Intl.DateTimeFormat("es-MX", { month: "short" }).format(new Date(Number(year), Number(month) - 1, 1))
+}
+
+function lastSixMonths() {
+  const now = new Date()
+  return Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1)
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+  })
+}
+
+function chartDefaults() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: { color: "#cbd5e1" }
+      }
+    },
+    scales: {
+      x: {
+        ticks: { color: "#94a3b8" },
+        grid: { color: "rgba(148, 163, 184, 0.08)" }
+      },
+      y: {
+        ticks: { color: "#94a3b8" },
+        grid: { color: "rgba(148, 163, 184, 0.08)" }
+      }
+    }
+  }
+}
+
+export function renderFinanceCharts() {
+  const transactions = getTransactions()
+  const months = lastSixMonths()
+  const income = months.map((month) => transactions
+    .filter((item) => item.type === "income" && monthKey(item.date) === month)
+    .reduce((sum, item) => sum + item.amount, 0))
+  const expense = months.map((month) => transactions
+    .filter((item) => item.type === "expense" && monthKey(item.date) === month)
+    .reduce((sum, item) => sum + item.amount, 0))
+
+  const barConfig = {
+    type: "bar",
+    data: {
+      labels: months.map(monthLabel),
+      datasets: [
+        { label: "Ingresos", data: income, backgroundColor: "rgba(52, 211, 153, 0.72)" },
+        { label: "Egresos", data: expense, backgroundColor: "rgba(251, 113, 133, 0.72)" }
+      ]
+    },
+    options: chartDefaults()
+  }
+
+  createChart("dashboard-finance-chart", barConfig)
+  createChart("monthly-finance-chart", barConfig)
+
+  const expenseByCategory = transactions
+    .filter((item) => item.type === "expense")
+    .reduce((acc, item) => {
+      acc[item.category] = (acc[item.category] || 0) + item.amount
+      return acc
+    }, {})
+
+  createChart("expense-category-chart", {
+    type: "doughnut",
+    data: {
+      labels: Object.keys(expenseByCategory),
+      datasets: [{
+        data: Object.values(expenseByCategory),
+        backgroundColor: ["#22d3ee", "#818cf8", "#34d399", "#fbbf24", "#fb7185", "#c084fc", "#60a5fa"]
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: "#cbd5e1" } }
+      }
+    }
+  })
+}
+
+export function renderTaskChart() {
+  const tasks = getTasks()
+  const completed = tasks.filter((task) => task.status === "completed").length
+  const overdue = tasks.filter(isTaskOverdue).length
+  const pending = tasks.length - completed - overdue
+
+  createChart("task-status-chart", {
+    type: "bar",
+    data: {
+      labels: ["Completadas", "Pendientes", "Vencidas"],
+      datasets: [{
+        label: "Tareas",
+        data: [completed, pending, overdue],
+        backgroundColor: ["#22d3ee", "#fbbf24", "#fb7185"]
+      }]
+    },
+    options: chartDefaults()
+  })
+}
+
+export function renderAnalytics() {
+  renderFinanceCharts()
+  renderTaskChart()
 }

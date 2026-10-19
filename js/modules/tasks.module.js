@@ -1,48 +1,42 @@
-import { getTasks, saveTasks } from "../services/storage.service.js";
+import { getTasks, saveTasks } from "../services/storage.service.js"
 
 const priorityLabels = {
-  low: 'Baja',
-  medium: 'Media',
-  high: 'Alta'
+  low: "Baja",
+  medium: "Media",
+  high: "Alta"
 }
 
 let onChange = () => {}
 
-const todayISO = () => {
+function todayISO() {
   const date = new Date()
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
 export function isTaskOverdue(task) {
-  return task.status !== 'completed' && task.dueDate < todayISO()
+  return task.status !== "completed" && task.dueDate < todayISO()
 }
 
-const taskBadge = (task) => {
-  if (task.status === 'completed') {
-    return `<span class="badge badge-completed">Completada</span>`
-  }
-  if (isTaskOverdue(task)) {
-    return `<span class="badge badge-overdue">Vencida</span>`
-  }
-  return `
-    <span class="badge badge-${task.priority}">
-      ${task.priority}
-    </span>
-  `
+function taskBadge(task) {
+  if (task.status === "completed") return '<span class="badge badge-completed">Completada</span>'
+  if (isTaskOverdue(task)) return '<span class="badge badge-overdue">Vencida</span>'
+  return `<span class="badge badge-${task.priority}">${priorityLabels[task.priority]}</span>`
 }
 
-const renderTaskList = (filter = 'all') => {
-  const container = document.querySelector('#task-list')
-  const tasks = getTasks().filter((task) => {
-    if (filter === 'all') return true
-    if (filter === 'completed') return task.status === 'completed'
-    if (filter === 'pending') return task.status !== 'completed' && !isTaskOverdue(task)
-    if (filter === 'overdue') return isTaskOverdue(task)
-    return true
-  }).sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+function renderTaskList(filter = "all") {
+  const container = document.querySelector("#task-list")
+  const tasks = getTasks()
+    .filter((task) => {
+      if (filter === "all") return true
+      if (filter === "completed") return task.status === "completed"
+      if (filter === "pending") return task.status !== "completed" && !isTaskOverdue(task)
+      if (filter === "overdue") return isTaskOverdue(task)
+      return true
+    })
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
 
   if (!tasks.length) {
-    container.innerHTML = `<div class="empty-state">No hay tareas para el filtro</div>`
+    container.innerHTML = '<div class="empty-state">No hay tareas para este filtro.</div>'
     return
   }
 
@@ -53,28 +47,25 @@ const renderTaskList = (filter = 'all') => {
           <p class="list-item-title">${escapeHtml(task.title)}</p>
           ${taskBadge(task)}
         </div>
-        <p class="list-item-meta">
-          ${escapeHtml(task.category)} - Vence ${formatDate(task.dueDate)}
-        </p>
+        <p class="list-item-meta">${escapeHtml(task.category)} · Vence ${formatDate(task.dueDate)}</p>
         ${task.description ? `<p class="list-item-description">${escapeHtml(task.description)}</p>` : ""}
       </div>
       <div class="list-actions">
-        <button class="mini-button" data-task-action="toggle" data-id="${task.id}">
-          ${task.status === 'completed' ? 'Reabrir' : 'Completar'}
-        </button>
-        <button class="mini-button" data-task-action="edit" data-id="${task.id}">
-          Editar
-        </button>
-        <button class="mini-button" data-task-action="delete" data-id="${task.id}">
-          Eliminar
-        </button>
+        <button class="mini-button" data-task-action="toggle" data-id="${task.id}">${task.status === "completed" ? "Reabrir" : "Completar"}</button>
+        <button class="mini-button" data-task-action="edit" data-id="${task.id}">Editar</button>
+        <button class="mini-button" data-task-action="delete" data-id="${task.id}">Eliminar</button>
       </div>
     </article>
-  `).join('')
+  `).join("")
 }
 
 function escapeHtml(value) {
-  return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;")
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;")
 }
 
 function formatDate(value) {
@@ -97,6 +88,7 @@ function resetForm() {
 function startEdit(taskId) {
   const task = getTasks().find((item) => item.id === taskId)
   if (!task) return
+
   document.querySelector("#task-id").value = task.id
   document.querySelector("#task-title").value = task.title
   document.querySelector("#task-description").value = task.description
@@ -110,6 +102,7 @@ function startEdit(taskId) {
 
 function saveTask(event) {
   event.preventDefault()
+
   const id = document.querySelector("#task-id").value
   const tasks = getTasks()
   const taskData = {
@@ -119,7 +112,9 @@ function saveTask(event) {
     priority: document.querySelector("#task-priority").value,
     dueDate: document.querySelector("#task-due-date").value
   }
+
   if (!taskData.title || !taskData.dueDate) return
+
   if (id) {
     const index = tasks.findIndex((task) => task.id === id)
     if (index >= 0) tasks[index] = { ...tasks[index], ...taskData }
@@ -131,6 +126,7 @@ function saveTask(event) {
       createdAt: new Date().toISOString()
     })
   }
+
   saveTasks(tasks)
   resetForm()
   refreshTasks()
@@ -140,21 +136,26 @@ function saveTask(event) {
 function handleTaskAction(event) {
   const button = event.target.closest("[data-task-action]")
   if (!button) return
+
   const { taskAction, id } = button.dataset
   const tasks = getTasks()
   const task = tasks.find((item) => item.id === id)
   if (!task) return
+
   if (taskAction === "toggle") {
     task.status = task.status === "completed" ? "pending" : "completed"
     saveTasks(tasks)
   }
+
   if (taskAction === "delete") {
     saveTasks(tasks.filter((item) => item.id !== id))
   }
+
   if (taskAction === "edit") {
     startEdit(id)
     return
   }
+
   refreshTasks()
   onChange()
 }
